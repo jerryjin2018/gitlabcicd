@@ -1,0 +1,53 @@
+# TEST
+image:
+   name: liquibase/liquibase
+   entrypoint:
+     - '/usr/bin/env'
+     - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+
+stages:
+  - start_db
+#  - check_schema_exists
+  - run_liquibase
+
+start_db_master:
+   stage: start_db
+
+#   services:
+#    - bash
+
+   script:
+    - echo "start master mysql"
+    - mkdir build
+    - echo "end master mysql"
+
+   artifacts:
+       paths:
+           - build/
+
+#check_schema_exists_master:
+#   stage: check_schema_exists
+
+#   script:
+#    - echo "start master check_schema_exists"
+#    - export MYSQL_PWD=$DB_PASSWORD_MASTER
+#    - echo "CREATE SCHEMA if not exists $DB_SCHEMA;" | mysql --user=$DB_USER_MASTER --host=$DB_HOST_MASTER   --protocol=tcp
+#    - echo "end master check_schema_exists"
+
+run_liquibase_master:
+   stage: run_liquibase
+
+#   services:
+#   - liquibase/liquibase
+
+   script:
+    - pwd
+    - cd app/rds
+    - pwd
+    - ls -la  
+    - echo "start master liquibase"
+    - mytag=`date +'%s'`
+    - liquibase --defaultsFile mysql.liquibase.properties --url jdbc:mysql://$DB_HOST_MASTER:3306/$DB_SCHEMA?useSSL=FALSE --username=$DB_USER_MASTER --password=$DB_PASSWORD_MASTER tag ${mytag}
+    - liquibase --defaultsFile mysql.liquibase.properties --url jdbc:mysql://$DB_HOST_MASTER:3306/$DB_SCHEMA?useSSL=FALSE --username=$DB_USER_MASTER --password=$DB_PASSWORD_MASTER update || liquibase --defaultsFile mysql.liquibase.properties --url jdbc:mysql://$DB_HOST_MASTER:3306/$DB_SCHEMA?useSSL=FALSE --username=$DB_USER_MASTER --password=$DB_PASSWORD_MASTER rollback ${mytag} 
+    - echo "end master liquibase"
+

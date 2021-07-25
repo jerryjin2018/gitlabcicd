@@ -1,0 +1,53 @@
+ # Gitlab CI file for automatically create and manage some CICD steps
+ 
+ image:
+   name: hashicorp/terraform:light
+   entrypoint:
+     - '/usr/bin/env'
+     - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+     - 'AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}'
+     - 'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}'
+     - 'AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}'
+
+ stages:
+   - build
+   - deploy
+   - destroy
+
+ before_script:
+   - echo "Before" 
+   - cd infra/rdsmysql/rdsreal
+   - terraform --version
+   - terraform init
+
+ build:
+   stage: build
+   #  when: manual
+   script:
+     - echo "Build"
+     - ls -la 
+     - terraform validate
+     - terraform plan
+
+
+ deploy:
+   stage: deploy
+   #  when: manual
+   script:
+     - terraform apply -auto-approve=true
+     - terraform output > ../../../config_rds.txt
+     - ls -la 
+     - cd ../../..
+     - tar cvf ./output_rds.tar ./config_rds.txt
+     - pwd
+     - ls -la 
+   artifacts:
+     paths:
+     - output_rds.tar
+
+
+ destroy:
+   stage: destroy
+   when: manual
+   script:
+     - terraform destroy -auto-approve

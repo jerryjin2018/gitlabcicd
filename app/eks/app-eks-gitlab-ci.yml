@@ -1,0 +1,123 @@
+# This gitlab ci file is to buld the docker file and push it to the ECR, then deploy this docker file to EKS cluster
+image: 
+  name: docker:20-dind
+  entrypoint:
+     - '/usr/bin/env'
+     - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+     - 'AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}'
+     - 'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}'
+     - 'AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}'
+
+services:
+  - name: docker:20-dind
+    alias: docker
+    command: ["--tls=false"]
+
+# Per your request, you can change this variables
+variables:
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""  
+  VERSION: v2
+  CONTAINER_NAME: "jerrytest/application/go-hello-world"
+  CONTAINER_IMAGE: "$CONTAINER_NAME:$VERSION"
+  ECR_STR: "659702723394.dkr.ecr.cn-northwest-1.amazonaws.com.cn"
+  AWS_REGION: "cn-northwest-1"
+  EKS_CLUSTER_PREFIX: "cicdeks-cluster"
+
+stages:
+  - build
+  - ingress
+  - deploy
+  - destroy
+
+build:
+  stage: build
+#  when: manual
+  script:
+    - apk add aws-cli
+    - pwd
+    - cd app/eks
+    - pwd
+    - ls -la
+    - docker build -t $CONTAINER_IMAGE .
+    - aws ecr get-login-password --region cn-northwest-1 | docker login --username AWS --password-stdin $ECR_STR
+# - aws --region cn-northwest-1 ecr create-repository --repository-name $CONTAINER_NAME
+    - aws --region cn-northwest-1 ecr describe-repositories --repository-names $CONTAINER_NAME || aws --region cn-northwest-1 ecr create-repository --repository-name $CONTAINER_NAME
+    - docker tag $CONTAINER_IMAGE $ECR_STR/$CONTAINER_IMAGE
+    - docker tag $CONTAINER_IMAGE $CONTAINER_NAME:latest
+    - docker push $ECR_STR/$CONTAINER_IMAGE
+
+ingress:
+  stage: ingress
+#  when: manual
+  script:
+    - apk add aws-cli
+    - cd app/eks
+    - pwd
+    - wget https://dl.k8s.io/release/v1.21.0/bin/linux/amd64/kubectl 
+    - chmod +x kubectl
+    - aws eks update-kubeconfig --name $(aws eks list-clusters --output text | grep ${EKS_CLUSTER_PREFIX} | awk '{print $2}')
+    - wget "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" 
+    - tar xvf eksctl_*_amd64.tar.gz
+    - CLUSTER_NAME=$(aws eks list-clusters --output text | grep ${EKS_CLUSTER_PREFIX} | awk '{print $2}')
+    - echo $CLUSTER_NAME
+    - OIDC_STR=`aws eks describe-cluster --name ${CLUSTER_NAME} --query "cluster.identity.oidc.issuer" --output text | awk -F/ '{print $NF}'`
+    - echo $OIDC_STR
+#    - RESULT_OIDC=$(aws iam list-open-id-connect-providers | grep 4897D3BE3FFD1B432B105084A5284CF6)
+    - RESULT_OIDC=$(aws iam list-open-id-connect-providers | grep $OIDC_STR)
+    - echo RESULT_OIDC is $RESULT_OIDC
+    - >
+      if [ -z "$RESULT_OIDC" ]; then
+        ./eksctl utils associate-iam-oidc-provider --cluster=${CLUSTER_NAME} --approve --region ${AWS_REGION}
+      fi
+    - wget https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.2.0/docs/install/iam_policy_cn.json
+#    - wget https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.1.3/docs/install/iam_policy_cn.json
+# need to add "ec2:DescribeAvailabilityZones",
+    - wget https://github.com/jetstack/cert-manager/releases/download/v1.0.2/cert-manager.yaml
+    - wget https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.2.0/docs/install/v2_2_0_full.yaml
+#    - wget https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.1.3/docs/install/v2_1_3_full.yaml
+    - POLICY_NAME=$(aws iam list-policies --query 'Policies[?PolicyName==`AWSLoadBalancerControllerIAMPolicy`].Arn' --output text --region ${AWS_REGION})   
+    - echo $POLICY_NAME
+    - >
+      if [ -z "$POLICY_NAME" ]; then
+        aws iam create-policy --policy-name AWSLoadBalancerControllerIAMPolicy --policy-document file://iam_policy_cn.json  
+      fi
+    - POLICY_NAME=$(aws iam list-policies --query 'Policies[?PolicyName==`AWSLoadBalancerControllerIAMPolicy`].Arn' --output text --region ${AWS_REGION})
+    - ./eksctl create iamserviceaccount --cluster=${CLUSTER_NAME} --namespace=kube-system --name=aws-load-balancer-controller --attach-policy-arn=${POLICY_NAME} --override-existing-serviceaccounts --approve
+    - ./kubectl apply -f https://raw.githubusercontent.com/nwcdlabs/container-mirror/master/webhook/mutating-webhook.yaml
+    - sed -i 's%quay.io%048912060910.dkr.ecr.cn-northwest-1.amazonaws.com.cn/quay%g' cert-manager.yaml
+    - ./kubectl apply -f cert-manager.yaml
+    - sed -i "s/your-cluster-name/${CLUSTER_NAME}/g" v2_2_0_full.yaml
+#    - sed -i '/- --ingress-class=alb/ i\            - --enable-shield=false\n            - --enable-waf=false\n            - --enable-wafv2=false' v2_1_3_full.yaml
+    - ./kubectl apply -f v2_2_0_full.yaml
+    - ARN_SA=$(./eksctl get iamserviceaccount --cluster ${CLUSTER_NAME} --name aws-load-balancer-controller --namespace kube-system | grep -i aws-load-balancer-controller | awk '{print $NF}')
+#    - ./kubectl annotate serviceaccount aws-load-balancer-controller -n kube-system eks.amazonaws.com/role-arn=${ARN_SA}
+
+
+deploy:
+  stage: deploy
+#  when: manual  
+  script:
+    - apk add aws-cli
+    - cd app/eks
+    - wget https://dl.k8s.io/release/v1.21.0/bin/linux/amd64/kubectl 
+    - chmod +x kubectl
+    - aws eks update-kubeconfig --name $(aws eks list-clusters --output text | grep ${EKS_CLUSTER_PREFIX} | awk '{print $2}')
+    - sed -i "s/<VERSION>/${VERSION}/g" deployment.yaml
+    - ./kubectl apply -f deployment.yaml
+
+
+destroy:
+  stage: destroy
+  when: manual
+  script:
+    - apk add aws-cli
+    - cd app/eks
+    - wget https://dl.k8s.io/release/v1.21.0/bin/linux/amd64/kubectl 
+    - chmod +x kubectl
+    - aws eks update-kubeconfig --name $(aws eks list-clusters --output text | grep ${EKS_CLUSTER_PREFIX} | awk '{print $2}')
+    - sed -i "s/<VERSION>/${VERSION}/g" deployment.yaml
+    - ./kubectl delete -f deployment.yaml
+    - aws ecr get-login-password --region cn-northwest-1 | docker login --username AWS --password-stdin $ECR_STR
+    - aws ecr delete-repository --repository-name $CONTAINER_NAME --force
