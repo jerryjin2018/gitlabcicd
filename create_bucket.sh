@@ -14,8 +14,8 @@ if [ "$EXIT_STATUS" -eq "0" ]; then
 
     # Bucket is not existing, create it and enable the versioning
     echo "$Bucket_Name is not existing."
-    aws s3 mb s3://jerry-terraform-states/
-    aws s3api put-bucket-versioning --bucket jerry-terraform-states --versioning-configuration Status=Enabled
+    aws s3 mb s3://$Bucket_Name/
+    aws s3api put-bucket-versioning --bucket $Bucket_Name --versioning-configuration Status=Enabled
 
     # Create object(Terraform state file) for EKS terraform file
     if [ -f "$FILEEKS" ]; then
@@ -23,7 +23,7 @@ if [ "$EXIT_STATUS" -eq "0" ]; then
     else 
         echo "$FILEEKS does not exist."
         touch $FILEEKS
-        aws s3 cp $FILEEKS s3://jerry-terraform-states/$FILEEKS
+        aws s3 cp $FILEEKS s3://$Bucket_Name/$FILEEKS
         rm -f $FILEEKS
     fi
 
@@ -33,7 +33,7 @@ if [ "$EXIT_STATUS" -eq "0" ]; then
     else 
         echo "$FILERDS does not exist."
         touch $FILERDS
-        aws s3 cp $FILERDS s3://jerry-terraform-states/$FILERDS
+        aws s3 cp $FILERDS s3://$Bucket_Name/$FILERDS
         rm -f $FILERDS
     fi
 else
