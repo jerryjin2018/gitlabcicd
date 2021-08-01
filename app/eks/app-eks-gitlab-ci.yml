@@ -50,6 +50,7 @@ build:
 
 ingress:
   stage: ingress
+  needs: [build]
 #  when: manual
   script:
     - apk add aws-cli
@@ -97,6 +98,7 @@ ingress:
 
 deploy:
   stage: deploy
+  needs: [ingress]
 #  when: manual  
   script:
     - apk add aws-cli
@@ -110,6 +112,7 @@ deploy:
 
 destroy:
   stage: destroy
+  needs: [deploy]
   when: manual
   script:
     - apk add aws-cli
