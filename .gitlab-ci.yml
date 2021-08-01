@@ -1,8 +1,10 @@
 # Parent gitlab-ci file, which trigger two CICD steps for AWS EKS cluster and RDS for mysql creation
+# And it's also with two CICD steps for applications on EKS and data updating on RDS for mysql
 
 stages:
 - trigger-modules
 
+# child gitlab pipeline for EKS cluster creation
 EKS cluster creation:
   stage: trigger-modules
   trigger:
@@ -11,6 +13,7 @@ EKS cluster creation:
     changes:
     - infra/eks-cluster/*
 
+# child gitlab pipeline for RDS for mysql creation
 RDS for mysql creation:
   stage: trigger-modules
   trigger:
@@ -20,6 +23,7 @@ RDS for mysql creation:
     - infra/rdsmysql/*
     - infra/rdsmysql/**/*
 
+# child gitlab pipeline for data updating on RDS for mysql
 RDS for app running:
   stage: trigger-modules
   trigger:
@@ -28,6 +32,7 @@ RDS for app running:
     changes:
     - app/rds/*
 
+# child gitlab pipeline for applications on EKS
 EKS for app running:
   stage: trigger-modules
   trigger:
