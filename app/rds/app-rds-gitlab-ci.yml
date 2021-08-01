@@ -36,7 +36,7 @@ start_db_master:
 
 run_liquibase_master:
    stage: run_liquibase
-
+   needs: [start_db_master]
 #   services:
 #   - liquibase/liquibase
 
