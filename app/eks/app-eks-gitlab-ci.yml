@@ -66,7 +66,10 @@ ingress:
     - OIDC_STR=`aws eks describe-cluster --name ${CLUSTER_NAME} --query "cluster.identity.oidc.issuer" --output text | awk -F/ '{print $NF}'`
     - echo $OIDC_STR
 #    - RESULT_OIDC=$(aws iam list-open-id-connect-providers | grep 4897D3BE3FFD1B432B105084A5284CF6)
-    - RESULT_OIDC=$(aws iam list-open-id-connect-providers | grep $OIDC_STR)
+#    - RESULT_OIDC=$(aws iam list-open-id-connect-providers | grep $OIDC_STR)
+    - aws iam list-open-id-connect-providers --output text > ./oidctemp.txt
+    - cat ./oidctemp.txt
+    - RESULT_OIDC=$(cat ./oidctemp.txt | sed -n "/${OIDC_STR}/p")
     - echo RESULT_OIDC is $RESULT_OIDC
     - >
       if [ -z "$RESULT_OIDC" ]; then
