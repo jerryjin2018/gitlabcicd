@@ -1,4 +1,4 @@
-## 这是一个验证Gitlab CICD Demo环境
+## 关于Amazon EKS基于Gitlab的CICD Demo环境
 ### 介绍
 基于客户实际工作场景中CICD的需求，同时结合IaC(基础设施即代码),GitOps的理念,使用Gitlab(Gitlab CI and Gitlab runner), Terraform, AWS EKS(托管的kubernetes), AWS RDS, AWS ECR, Liquibase来构建一个完整的CICD的Pipeline.  其中包括  
 
